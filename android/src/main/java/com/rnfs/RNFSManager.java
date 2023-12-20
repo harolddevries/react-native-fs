@@ -186,7 +186,7 @@ public class RNFSManager extends ReactContextBaseJavaModule {
   }
 
   @ReactMethod
-  public void write(String filepath, String base64Content, int position, Promise promise) {
+  public void write(String filepath, String base64Content, double position, Promise promise) {
     try {
       byte[] bytes = Base64.decode(base64Content, Base64.DEFAULT);
 
@@ -234,7 +234,7 @@ public class RNFSManager extends ReactContextBaseJavaModule {
   }
 
   @ReactMethod
-  public void read(String filepath, int length, int position, Promise promise) {
+  public void read(String filepath, int length, double position, Promise promise) {
     try {
       InputStream inputStream = getInputStream(filepath);
       byte[] buffer = new byte[length];
