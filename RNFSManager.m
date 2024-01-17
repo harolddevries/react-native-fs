@@ -294,48 +294,61 @@ RCT_EXPORT_METHOD(readFile:(NSString *)filepath
 }
 
 RCT_EXPORT_METHOD(read:(NSString *)filepath
-                  length: (double)length
-                  position: (double)position
+                  length: (NSInteger *)length
+                  position: (NSInteger *)position
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 {
-    BOOL fileExists = [[NSFileManager defaultManager] fileExistsAtPath:filepath];
+    NSFileHandle *file = nil;
 
-    if (!fileExists) {
-        return reject(@"ENOENT", [NSString stringWithFormat:@"ENOENT: no such file or directory, open '%@'", filepath], nil);
+    @try {
+        BOOL fileExists = [[NSFileManager defaultManager] fileExistsAtPath:filepath];
+
+        if (!fileExists) {
+            reject(@"ENOENT", [NSString stringWithFormat:@"ENOENT: no such file or directory, open '%@'", filepath], nil);
+            return;
+        }
+
+        NSError *error = nil;
+        NSDictionary *attributes = [[NSFileManager defaultManager] attributesOfItemAtPath:filepath error:&error];
+
+        if (error) {
+            [self reject:reject withError:error];
+            return;
+        }
+
+        if ([attributes objectForKey:NSFileType] == NSFileTypeDirectory) {
+            reject(@"EISDIR", @"EISDIR: illegal operation on a directory, read", nil);
+            return;
+        }
+
+        // Open the file handler
+        file = [NSFileHandle fileHandleForReadingAtPath:filepath];
+        if (file == nil) {
+            reject(@"EISDIR", @"EISDIR: Could not open file for reading", nil);
+            return;
+        }
+
+        // Seek to the position if there is one
+        [file seekToFileOffset: (int)position];
+
+        NSData *content;
+        if ((int)length > 0) {
+            content = [file readDataOfLength: (int)length];
+        } else {
+            content = [file readDataToEndOfFile];
+        }
+
+        NSString *base64Content = [content base64EncodedStringWithOptions:NSDataBase64EncodingEndLineWithLineFeed];
+
+        resolve(base64Content);
     }
-
-    NSError *error = nil;
-
-    NSDictionary *attributes = [[NSFileManager defaultManager] attributesOfItemAtPath:filepath error:&error];
-
-    if (error) {
-        return [self reject:reject withError:error];
+    @catch (NSException *exception) {
+        reject(@"Exception", [exception reason], nil);
     }
-
-    if ([attributes objectForKey:NSFileType] == NSFileTypeDirectory) {
-        return reject(@"EISDIR", @"EISDIR: illegal operation on a directory, read", nil);
+    @finally {
+        [file closeFile];
     }
-
-    // Open the file handler.
-    NSFileHandle *file = [NSFileHandle fileHandleForReadingAtPath:filepath];
-    if (file == nil) {
-        return reject(@"EISDIR", @"EISDIR: Could not open file for reading", nil);
-    }
-
-    // Seek to the position if there is one.
-    [file seekToFileOffset: position];
-
-    NSData *content;
-    if (length > 0) {
-        content = [file readDataOfLength: length];
-    } else {
-        content = [file readDataToEndOfFile];
-    }
-
-    NSString *base64Content = [content base64EncodedStringWithOptions:NSDataBase64EncodingEndLineWithLineFeed];
-
-    resolve(base64Content);
 }
 
 RCT_EXPORT_METHOD(hash:(NSString *)filepath
